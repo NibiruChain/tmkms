@@ -100,6 +100,7 @@ impl UploadCommand {
             &config.api_endpoint,
             &vault_token,
             &self.pk_name,
+            &config.ca_cert,
         )
         .unwrap_or_else(|_| panic!("Unable to connect to Vault at {}", config.api_endpoint));
 

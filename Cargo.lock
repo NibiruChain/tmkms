@@ -3361,6 +3361,8 @@ dependencies = [
  "rand_core 0.6.4",
  "rpassword",
  "rsa",
+ "rustls 0.20.8",
+ "rustls-pemfile",
  "sdkms",
  "serde",
  "serde_json",

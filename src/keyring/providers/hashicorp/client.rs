@@ -4,7 +4,10 @@ use std::collections::{BTreeMap, HashMap};
 use super::error::Error;
 
 use std::time::Duration;
+use std::{fs, io, sync};
 use ureq::Agent;
+use rustls::RootCertStore;
+use rustls_pemfile;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -120,20 +123,35 @@ impl std::fmt::Display for CreateKeyType {
 }
 
 impl TendermintValidatorApp {
-    pub fn connect(api_endpoint: &str, token: &str, key_name: &str) -> Result<Self, Error> {
-        //this call performs token self lookup, to fail fast
-        //let mut client = Client::new(host, token)?;
-
+    pub fn connect(api_endpoint: &str, token: &str, key_name: &str, ca_cert: &str) -> Result<Self, Error> {
         //default conect timeout is 30s, this should be ok, since we block
-        let agent: Agent = ureq::AgentBuilder::new()
+        let mut agent_builder = ureq::AgentBuilder::new()
             .timeout_read(Duration::from_secs(5))
             .timeout_write(Duration::from_secs(5))
             .user_agent(&format!(
                 "{}/{}",
                 env!("CARGO_PKG_NAME"),
                 env!("CARGO_PKG_VERSION")
-            ))
-            .build();
+            ));
+
+        if !ca_cert.is_empty() {
+            debug!("Using provided CA certificate at {}", ca_cert);
+            let cert_file = fs::File::open(ca_cert).expect("Cant open certificate file");
+            let mut cert_rd = io::BufReader::new(cert_file);
+            let certs = rustls_pemfile::certs(&mut cert_rd).expect("Invalid certificate");
+
+            let mut roots = RootCertStore::empty();
+            roots.add_parsable_certificates(&certs);
+
+            let tls_config = rustls::ClientConfig::builder()
+                .with_safe_defaults()
+                .with_root_certificates(roots)
+                .with_no_client_auth();
+
+            agent_builder = agent_builder.tls_config(sync::Arc::new(tls_config))
+        }
+
+        let agent = agent_builder.build();
 
         let app = TendermintValidatorApp {
             agent,

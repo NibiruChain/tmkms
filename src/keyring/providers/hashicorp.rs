@@ -44,6 +44,7 @@ pub fn init(
             &config.api_endpoint,
             &config.access_token,
             &config.pk_name,
+            &config.ca_cert,
         )
         .unwrap_or_else(|_| {
             panic!(

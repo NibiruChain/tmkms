@@ -18,4 +18,7 @@ pub struct HashiCorpConfig {
 
     /// Vault's key name with ed25519 pub+priv key
     pub pk_name: String,
+
+    /// Path to CA certificate to connect to vault
+    pub ca_cert: String,
 }
