@@ -1,11 +1,11 @@
 //! Test the Hashicorp is working by performing signatures successively
 
-use crate::{config::provider::hashicorp::HashiCorpConfig, prelude::*};
+use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
 use aes_kw;
 use clap::Parser;
 use serde::Serialize;
-use std::{path::PathBuf, process};
+use std::process;
 
 use crate::keyring::providers::hashicorp::{client, error};
 use rsa::{pkcs8::DecodePublicKey, PaddingScheme, PublicKey, RsaPublicKey};
@@ -18,15 +18,6 @@ const PKCS8_HEADER: &[u8; 16] = b"\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x
 /// The `hashicorp test` subcommand
 #[derive(Command, Debug, Default, Parser)]
 pub struct UploadCommand {
-    /// path to tmkms.toml
-    #[clap(
-        short = 'c',
-        long = "config",
-        value_name = "CONFIG",
-        help = "/path/to/tmkms.toml"
-    )]
-    pub config: Option<PathBuf>,
-
     /// enable verbose debug logging
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
@@ -49,60 +40,43 @@ struct ImportRequest {
 }
 
 impl Runnable for UploadCommand {
-    /// Perform a import using the current TMKMS configuration
+    /// Perform a import
     fn run(&self) {
         if self.pk_name.is_empty() {
             status_err!("pk_name cannot be empty!");
             process::exit(1);
         }
-
-        let config = APP.config();
-
-        //finding key in config will point to correct Vault's URL
-        let config = if let Some(c) = config
-            .providers
-            .hashicorp
-            .iter()
-            .find(|c| c.pk_name == self.pk_name)
-        {
-            c
-        } else {
-            let cfg_path = if let Some(path) = self.config.as_ref() {
-                path.clone()
-            } else {
-                PathBuf::from("./tmkms.toml")
-            };
-            status_err!(
-                "pk_name is not configured in provided \"{}\"!",
-                cfg_path.as_path().to_str().unwrap()
-            );
-            process::exit(1);
-        };
-
-        self.upload(config);
+        self.upload();
     }
 }
 
 impl UploadCommand {
-    fn upload(&self, config: &HashiCorpConfig) {
+    fn upload(&self) {
         //https://www.vaultproject.io/docs/secrets/transit#bring-your-own-key-byok
         //https://learn.hashicorp.com/tutorials/vault/eaas-transit
 
+        // API address
+        let vault_addr = std::env::var("VAULT_ADDR")
+            .expect("vault address \"VAULT_ADDR\" is not set!");
+
         //root token or token with enough admin rights
         let vault_token = std::env::var("VAULT_TOKEN")
-            .expect("root token \"VAULT_TOKEN\" is not set (confg token is NOT used)!");
+            .expect("root token \"VAULT_TOKEN\" is not set!");
+
+        // path to vault CA cert
+        let vault_ca = std::env::var("VAULT_CACERT").unwrap();
 
         let ed25519_input_key = input_key(&self.payload)
             .expect("secret: error converting \"key-to-upload\"[ed25519] with PKCS8 wrapping");
 
         //create app instance
         let app = client::TendermintValidatorApp::connect(
-            &config.api_endpoint,
+            &vault_addr,
             &vault_token,
             &self.pk_name,
-            &config.ca_cert,
+            &vault_ca,
         )
-        .unwrap_or_else(|_| panic!("Unable to connect to Vault at {}", config.api_endpoint));
+        .unwrap_or_else(|_| panic!("Unable to connect to Vault at {}", vault_addr));
 
         use aes_gcm::KeyInit;
         let v_aes_key = aes_gcm::Aes256Gcm::generate_key(&mut aes_gcm::aead::OsRng);
@@ -234,7 +208,6 @@ mod tests {
 
     const PK_NAME: &str = "upload-test";
     const VAULT_TOKEN: &str = "access-token";
-    const CHAIN_ID: &str = "mock-chain-id";
     const ED25519: &str =
         "4YZKJ/pfJj42tdcl40dXz/ugRgrBR0/Pp5C2kjHL6AZhBFozq5EspBwCb44zef0cLEO/WuLf3dI+BPCNOPwxRw==";
 
@@ -245,18 +218,11 @@ mod tests {
         let cmd = UploadCommand {
             verbose: false,
             pk_name: PK_NAME.into(),
-            config: None,
             payload: ED25519.into(),
         };
 
-        let config = HashiCorpConfig {
-            access_token: "crazy-long-string".into(),
-            api_endpoint: format!("http://{}", server_address()),
-            pk_name: PK_NAME.into(),
-            chain_id: tendermint::chain::Id::try_from(CHAIN_ID).unwrap(),
-        };
-
         std::env::set_var("VAULT_TOKEN", VAULT_TOKEN);
+        std::env::set_var("VAULT_ADDR", format!("http://{}", server_address()));
 
         //init
         let lookup_self = mock("GET", "/v1/auth/token/lookup-self")
@@ -279,7 +245,7 @@ mod tests {
             .create();
 
         //test
-        cmd.upload(&config);
+        cmd.upload();
 
         lookup_self.assert();
         export.assert();

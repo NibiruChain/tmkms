@@ -8,7 +8,6 @@ pub use self::upload::UploadCommand;
 
 use abscissa_core::{Command, Runnable};
 use clap::Subcommand;
-use std::path::PathBuf;
 
 /// `hashicorp` subcommand
 #[derive(Command, Debug, Runnable, Subcommand)]
@@ -21,12 +20,12 @@ pub enum HashicorpCommand {
 }
 
 impl HashicorpCommand {
-    pub(super) fn config_path(&self) -> Option<&PathBuf> {
-        match self {
-            HashicorpCommand::Test(init) => init.config.as_ref(),
-            HashicorpCommand::Upload(init) => init.config.as_ref(),
-        }
-    }
+    // pub(super) fn config_path(&self) -> Option<&PathBuf> {
+    //     match self {
+    //         HashicorpCommand::Test(init) => init.config.as_ref(),
+    //         HashicorpCommand::Upload(_init) => None,
+    //     }
+    // }
 
     pub(super) fn verbose(&self) -> bool {
         match self {

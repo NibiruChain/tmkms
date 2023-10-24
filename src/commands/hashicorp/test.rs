@@ -4,7 +4,7 @@ use crate::prelude::*;
 use abscissa_core::{Command, Runnable};
 use clap::Parser;
 use signature::SignerMut;
-use std::{path::PathBuf, process, time::Instant};
+use std::{fs, path::PathBuf, process, time::Instant};
 
 /// The `hashicorp test` subcommand
 #[derive(Command, Debug, Default, Parser)]
@@ -17,6 +17,7 @@ pub struct TestCommand {
         help = "/path/to/tmkms.toml"
     )]
     pub config: Option<PathBuf>,
+    
     /// enable verbose debug logging
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
@@ -54,9 +55,12 @@ impl Runnable for TestCommand {
 
         let started_at = Instant::now();
 
+        let token = fs::read_to_string(&config.token_file)
+            .expect("Failed to read token from file");
+
         let app = crate::keyring::providers::hashicorp::client::TendermintValidatorApp::connect(
             &config.api_endpoint,
-            &config.access_token,
+            &token,
             &self.pk_name,
             "",
         )

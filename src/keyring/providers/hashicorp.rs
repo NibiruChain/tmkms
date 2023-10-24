@@ -3,6 +3,7 @@ pub(crate) mod client;
 pub(crate) mod error;
 pub(crate) mod signer;
 
+use std::fs;
 use crate::{
     chain,
     config::provider::hashicorp::HashiCorpConfig,
@@ -40,9 +41,12 @@ pub fn init(
             chains.push(config.chain_id.to_string())
         }
 
+        let token = fs::read_to_string(&config.token_file)
+            .expect("Failed to read token from file");
+
         let mut app = client::TendermintValidatorApp::connect(
             &config.api_endpoint,
-            &config.access_token,
+            &token,
             &config.pk_name,
             &config.ca_cert,
         )

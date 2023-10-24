@@ -14,7 +14,7 @@ pub struct HashiCorpConfig {
     pub api_endpoint: String,
 
     /// Access token for authenticating to HashiCorp Vault
-    pub access_token: String,
+    pub token_file: String,
 
     /// Vault's key name with ed25519 pub+priv key
     pub pk_name: String,

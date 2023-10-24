@@ -18,13 +18,13 @@ state_file = "/home/soleinik/work/rust/tmkms/state/cosmoshub-3-consensus.json"
 [[providers.hashicorp]]
 chain_id = "cosmoshub-4"
 api_endpoint= "http://127.0.0.1:8200"
-access_token="hvs.CAESIBwDAKQh2JKuxibeHOV-jmc2T68loAKLNWO2_QX1l7L3Gh4KHGh2cy5iYnRJRVVLdHBqTVMwUGdLZFNGWjNCZkc"
+token="path/to/token/file"
 pk_name="cosmoshub-sign-key"
 
 [[providers.hashicorp]]
 chain_id = "cosmoshub-4"
 api_endpoint= "http://127.0.0.1:8200"
-access_token="hvs.CAESIBwDAKQh2JKuxibeHOV-jmc2T68loAKLNWO2_QX1l7L3Gh4KHGh2cy5iYnRJRVVLdHBqTVMwUGdLZFNGWjNCZkc"
+token="path/to/token/file"
 pk_name="cosmoshub-sign-key"
 
 
