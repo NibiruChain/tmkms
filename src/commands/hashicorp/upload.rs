@@ -56,15 +56,19 @@ impl UploadCommand {
         //https://learn.hashicorp.com/tutorials/vault/eaas-transit
 
         // API address
-        let vault_addr = std::env::var("VAULT_ADDR")
-            .expect("vault address \"VAULT_ADDR\" is not set!");
+        let vault_addr =
+            std::env::var("VAULT_ADDR").expect("vault address \"VAULT_ADDR\" is not set!");
 
         //root token or token with enough admin rights
-        let vault_token = std::env::var("VAULT_TOKEN")
-            .expect("root token \"VAULT_TOKEN\" is not set!");
+        let vault_token =
+            std::env::var("VAULT_TOKEN").expect("root token \"VAULT_TOKEN\" is not set!");
 
         // path to vault CA cert
-        let vault_ca = std::env::var("VAULT_CACERT").unwrap();
+        let vault_ca = std::env::var("VAULT_CACERT").ok();
+        let vault_ca = vault_ca
+            .as_ref()
+            .map(String::as_str)
+            .unwrap_or("");
 
         let ed25519_input_key = input_key(&self.payload)
             .expect("secret: error converting \"key-to-upload\"[ed25519] with PKCS8 wrapping");
