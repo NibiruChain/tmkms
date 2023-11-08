@@ -1,16 +1,18 @@
 //! Integration tests for the `init` subcommand
 
-use crate::cli;
-use abscissa_core::Config;
-use std::{ffi::OsStr, fs};
-use tmkms::{commands::init::networks::Network, config::KmsConfig};
+#[cfg(feature = "softsign")]
+mod softsign_init_test {
+    use crate::cli;
+    use abscissa_core::Config;
+    use std::{ffi::OsStr, fs};
+    use tmkms::{commands::init::networks::Network, config::KmsConfig};
 
-#[test]
-fn test_command() {
-    let parent_dir = tempfile::tempdir().unwrap();
+    #[test]
+    fn test_command() {
+        let parent_dir = tempfile::tempdir().unwrap();
 
-    let output_dir = parent_dir.path().join("tmkms");
-    assert!(!output_dir.exists());
+        let output_dir = parent_dir.path().join("tmkms");
+        assert!(!output_dir.exists());
 
     // Network names to test with
     let networks = Network::all()

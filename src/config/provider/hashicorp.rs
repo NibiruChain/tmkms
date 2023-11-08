@@ -1,0 +1,24 @@
+//! Configuration for HashiCorp Vault
+
+use crate::chain;
+use serde::Deserialize;
+
+#[derive(Clone, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+/// Hashicorp Vault signer configuration
+pub struct HashiCorpConfig {
+    /// Chains this signing key is authorized to be used from
+    pub chain_id: chain::Id,
+
+    /// HashiCorp Vault API endpoint, e.g. https://127.0.0.1:8200
+    pub api_endpoint: String,
+
+    /// Access token for authenticating to HashiCorp Vault
+    pub token_file: String,
+
+    /// Vault's key name with ed25519 pub+priv key
+    pub pk_name: String,
+
+    /// Path to CA certificate to connect to vault
+    pub ca_cert: String,
+}

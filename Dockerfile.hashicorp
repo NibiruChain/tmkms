@@ -1,0 +1,13 @@
+FROM rust:1.66-alpine AS builder
+
+RUN apk add --no-cache g++ zlib zlib-dev git
+
+WORKDIR /app
+COPY . /app
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+RUN cargo build --release --features=hashicorp
+
+FROM alpine
+COPY --from=builder /app/target/release/tmkms /usr/local/bin/
+ENTRYPOINT ["/usr/local/bin/tmkms"]

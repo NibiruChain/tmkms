@@ -1,0 +1,11 @@
+[[providers.hashicorp]]
+#ChainId this provider is configured for
+chain_id = "$CHAIN_ID"
+#Vault's api url - VAULT_ADDR
+api_endpoint= "http://127.0.0.1:8200"
+#Vault's access token path - path to file containing vault token
+token_file="path/to/token/file"
+#Vault's transit secret engine key - vault write transit/keys/<cosmoshub-sign-key> type=ed25519
+pk_name="cosmoshub-sign-key"
+#Path to CA certificate to be used to connect to vault
+ca_cert=""
