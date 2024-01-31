@@ -7,7 +7,3 @@ tmkms.toml
 *.swp
 
 \.idea/
-/state
-/secrets
-/.vscode
-**/*.bin
