@@ -9,5 +9,6 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 RUN cargo build --release --features "$(grep 'feature =' src/keyring/providers.rs | tr -d '[:blank:]' | sort | uniq | cut -d '"' -f 2 | xargs)"
 
 FROM alpine
+RUN apk add --no-cache tini
 COPY --from=builder /app/target/release/tmkms /usr/local/bin/
-ENTRYPOINT ["/usr/local/bin/tmkms"]
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/tmkms"]
