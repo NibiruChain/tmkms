@@ -1,5 +1,5 @@
 use super::error::Error;
-use crate::config::provider::hashicorp::VaultEndpointConfig;
+use crate::config::provider::hashicorp::AdapterConfig;
 use crate::keyring::ed25519;
 use crate::keyring::providers::hashicorp::vault_client::{CreateKeyType, VaultClient};
 use abscissa_core::prelude::*;
@@ -18,24 +18,30 @@ unsafe impl Send for TendermintValidatorApp {}
 
 impl TendermintValidatorApp {
     pub fn connect(
-        api_endpoint: &str,
         token: &str,
         key_name: &str,
-        endpoints: Option<VaultEndpointConfig>,
-        ca_cert: Option<String>,
-        skip_verify: Option<bool>,
-        enable_pk_cache: Option<bool>,
+        adapter_config: &AdapterConfig,
     ) -> Result<Self, Error> {
-        let vault_client = VaultClient::new(api_endpoint, token, endpoints, ca_cert, skip_verify);
+        let vault_client = VaultClient::new(
+            &adapter_config.vault_addr,
+            token,
+            adapter_config.endpoints.to_owned(),
+            adapter_config.vault_cacert.to_owned(),
+            adapter_config.vault_skip_verify.to_owned(),
+            adapter_config.exit_on_error.to_owned(),
+        );
 
         let app = TendermintValidatorApp {
             vault_client,
             key_name: key_name.to_owned(),
-            enable_pk_cache,
+            enable_pk_cache: adapter_config.cache_pk,
             pk_cache: None,
         };
 
-        debug!("Initialized with Vault host at {}", api_endpoint);
+        debug!(
+            "Initialized with Vault host at {}",
+            adapter_config.vault_addr
+        );
         app.handshake()?;
 
         Ok(app)
@@ -116,13 +122,16 @@ mod tests {
 
         // test
         let app = TendermintValidatorApp::connect(
-            &format!("http://{}", server_address()),
             TEST_TOKEN,
             TEST_KEY_NAME,
-            None,
-            None,
-            None,
-            Some(false),
+            &AdapterConfig {
+                vault_addr: format!("http://{}", server_address()),
+                endpoints: None,
+                vault_cacert: None,
+                vault_skip_verify: None,
+                exit_on_error: None,
+                cache_pk: Some(false),
+            },
         );
 
         assert!(app.is_ok());
@@ -139,13 +148,16 @@ mod tests {
 
         // app
         let mut app = TendermintValidatorApp::connect(
-            &format!("http://{}", server_address()),
             TEST_TOKEN,
             TEST_KEY_NAME,
-            None,
-            None,
-            None,
-            Some(true),
+            &AdapterConfig {
+                vault_addr: format!("http://{}", server_address()),
+                endpoints: None,
+                vault_cacert: None,
+                vault_skip_verify: None,
+                exit_on_error: None,
+                cache_pk: Some(true),
+            },
         )
         .expect("Failed to connect");
 
@@ -189,13 +201,16 @@ mod tests {
 
         // app
         let app = TendermintValidatorApp::connect(
-            &format!("http://{}", server_address()),
             TEST_TOKEN,
             TEST_KEY_NAME,
-            None,
-            None,
-            None,
-            Some(false),
+            &AdapterConfig {
+                vault_addr: format!("http://{}", server_address()),
+                endpoints: Default::default(),
+                vault_cacert: None,
+                vault_skip_verify: None,
+                exit_on_error: None,
+                cache_pk: Some(false),
+            },
         )
         .expect("Failed to connect");
 
@@ -226,6 +241,54 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(
+        expected = "PoisonError prohibited Vault HTTP response code: 403, URL: http://127.0.0.1:1234/v1/transit/sign/test-key-name, exiting..."
+    )]
+    fn hashicorp_exit_on_error() {
+        // setup
+        let lookup_self = mock("GET", "/v1/auth/token/lookup-self")
+            .match_header("X-Vault-Token", TEST_TOKEN)
+            .with_body(TOKEN_DATA)
+            .create();
+
+        // app
+        let app = TendermintValidatorApp::connect(
+            TEST_TOKEN,
+            TEST_KEY_NAME,
+            &AdapterConfig {
+                vault_addr: format!("http://{}", server_address()),
+                endpoints: Default::default(),
+                vault_cacert: None,
+                vault_skip_verify: None,
+                exit_on_error: Some(vec![403]),
+                cache_pk: Some(false),
+            },
+        )
+        .expect("Failed to connect");
+
+        let body = serde_json::to_string(&SignRequest {
+            input: TEST_PAYLOAD_TO_SIGN_BASE64.into(),
+        })
+        .unwrap();
+
+        let sign_mock = mock(
+            "POST",
+            format!("/v1/transit/sign/{}", TEST_KEY_NAME).as_str(),
+        )
+        .match_header("X-Vault-Token", TEST_TOKEN)
+        .match_body(body.as_str())
+        .with_body(SIGN_RESPONSE)
+        .with_status(403)
+        .create();
+
+        // server call
+        let _ = app.sign(TEST_PAYLOAD_TO_SIGN);
+
+        lookup_self.assert();
+        sign_mock.assert();
+    }
+
+    #[test]
     fn hashicorp_sign_empty_payload_should_fail() {
         // setup
         let lookup_self = mock("GET", "/v1/auth/token/lookup-self")
@@ -235,13 +298,16 @@ mod tests {
 
         // app
         let app = TendermintValidatorApp::connect(
-            &format!("http://{}", server_address()),
             TEST_TOKEN,
             TEST_KEY_NAME,
-            None,
-            None,
-            None,
-            Some(false),
+            &AdapterConfig {
+                vault_addr: format!("http://{}", server_address()),
+                endpoints: Default::default(),
+                vault_cacert: None,
+                vault_skip_verify: None,
+                exit_on_error: None,
+                cache_pk: Some(false),
+            },
         )
         .expect("Failed to connect");
 

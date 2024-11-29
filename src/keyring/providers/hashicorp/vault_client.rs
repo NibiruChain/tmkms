@@ -170,6 +170,7 @@ pub(crate) struct VaultClient {
     api_endpoint: String,
     endpoints: VaultEndpointConfig,
     token: String,
+    exit_on_error: Vec<u16>,
 }
 
 pub const VAULT_TOKEN: &str = "X-Vault-Token";
@@ -182,6 +183,7 @@ impl VaultClient {
         endpoints: Option<VaultEndpointConfig>,
         ca_cert: Option<String>,
         skip_verify: Option<bool>,
+        exit_on_error: Option<Vec<u16>>,
     ) -> Self {
         // this call performs token self lookup, to fail fast
         // let mut client = Client::new(host, token)?;
@@ -233,6 +235,7 @@ impl VaultClient {
             endpoints: endpoints.unwrap_or_default(),
             agent,
             token: token.into(),
+            exit_on_error: exit_on_error.unwrap_or_default(),
         }
     }
 
@@ -247,17 +250,17 @@ impl VaultClient {
         }
 
         // https://developer.hashicorp.com/vault/api-docs/secret/transit#read-key
-        let data = if let Some(data) = self
+        let res = self
             .agent
             .get(&format!(
                 "{}{}/{}",
                 self.api_endpoint, self.endpoints.keys, key_name
             ))
             .set(VAULT_TOKEN, &self.token)
-            .call()?
-            .into_json::<Root<PublicKeyResponse>>()?
-            .data
-        {
+            .call();
+
+        let response = self.check_response_status_code(res)?;
+        let data = if let Some(data) = response.into_json::<Root<PublicKeyResponse>>()?.data {
             data
         } else {
             return Err(Error::InvalidPubKey(
@@ -269,7 +272,7 @@ impl VaultClient {
         let key_data = data.keys.iter().last();
 
         let pubk = if let Some((version, map)) = key_data {
-            debug!("public key vetion:{}", version);
+            debug!("public key version:{}", version);
             if let Some(pubk) = map.get("public_key") {
                 if let Some(key_type) = map.get("name") {
                     if CONSENUS_KEY_TYPE != key_type {
@@ -313,20 +316,16 @@ impl VaultClient {
     }
 
     pub fn handshake(&self) -> Result<(), Error> {
-        let _ = self
+        let res = self
             .agent
             .get(&format!(
                 "{}{}",
                 self.api_endpoint, self.endpoints.handshake,
             ))
             .set(VAULT_TOKEN, &self.token)
-            .call()
-            .map_err(|e| {
-                Error::Combined(
-                    "Is \"access_token\" value correct?".into(),
-                    Box::new(e.into()),
-                )
-            })?;
+            .call();
+
+        self.check_response_status_code(res)?;
         Ok(())
     }
 
@@ -349,17 +348,17 @@ impl VaultClient {
 
         debug!("signing request: base64 encoded and about to submit for signing...");
 
-        let data = if let Some(data) = self
+        let res = self
             .agent
             .post(&format!(
                 "{}{}/{}",
                 self.api_endpoint, self.endpoints.sign, key_name
             ))
             .set(VAULT_TOKEN, &self.token)
-            .send_json(body)?
-            .into_json::<Root<SignResponse>>()?
-            .data
-        {
+            .send_json(body);
+
+        let response = self.check_response_status_code(res)?;
+        let data = if let Some(data) = response.into_json::<Root<SignResponse>>()?.data {
             data
         } else {
             return Err(Error::NoSignature);
@@ -396,23 +395,22 @@ impl VaultClient {
     }
 
     pub fn wrapping_key_pem(&self) -> Result<String, Error> {
-        debug!("getting wraping key...");
         #[derive(Debug, Deserialize)]
         struct PublicKeyResponse {
             public_key: String,
         }
 
-        let data = if let Some(data) = self
+        let res = self
             .agent
             .get(&format!(
                 "{}{}",
                 self.api_endpoint, self.endpoints.wrapping_key
             ))
             .set(VAULT_TOKEN, &self.token)
-            .call()?
-            .into_json::<Root<PublicKeyResponse>>()?
-            .data
-        {
+            .call();
+
+        let response = self.check_response_status_code(res)?;
+        let data = if let Some(data) = response.into_json::<Root<PublicKeyResponse>>()?.data {
             data
         } else {
             return Err(Error::InvalidPubKey("Error getting wrapping key!".into()));
@@ -435,15 +433,40 @@ impl VaultClient {
             exportable,
         };
 
-        let _ = self
+        let res = self
             .agent
             .post(&format!(
                 "{}{}/{}/import",
                 self.api_endpoint, self.endpoints.keys, key_name
             ))
             .set(VAULT_TOKEN, &self.token)
-            .send_json(body)?;
+            .send_json(body);
+
+        self.check_response_status_code(res)?;
 
         Ok(())
+    }
+
+    fn check_response_status_code(
+        &self,
+        response: Result<ureq::Response, ureq::Error>,
+    ) -> Result<ureq::Response, Error> {
+        match response {
+            Ok(response) => Ok(response),
+            Err(ureq::Error::Status(code, response)) => {
+                if self.exit_on_error.contains(&code) {
+                    panic!(
+                        "{}",
+                        Error::ProhibitedResponseCode(
+                            code.to_string(),
+                            response.get_url().to_string(),
+                        )
+                    );
+                } else {
+                    Err(ureq::Error::Status(code, response))?
+                }
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 }
